@@ -6,12 +6,15 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
+
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
+import meteordevelopment.meteorclient.systems.modules.Categories;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import com.ShoXx.addon.AddonTemplate;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
+import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
@@ -32,14 +35,22 @@ public class WallBuilder extends Module {
     private final SettingGroup sgRender = settings.createGroup("Render");
     private final SettingGroup sgPattern1 = settings.createGroup("Pattern 1");
     private final SettingGroup sgPattern2 = settings.createGroup("Pattern 2");
+    private final SettingGroup sgPattern3 = settings.createGroup("Pattern 3");
 
-    private boolean usingPattern1 = true;
+    private int currentPatternIndex = 1;
     private int buildStep = 0;
     private State state = State.BUILDING;
 
     private final Setting<Boolean> usePattern2 = sgGeneral.add(new BoolSetting.Builder()
         .name("use-pattern-2")
         .description("Whether to use pattern 2 after pattern 1.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> usePattern3 = sgGeneral.add(new BoolSetting.Builder()
+        .name("use-pattern-3")
+        .description("Whether to use pattern 3 after pattern 2.")
         .defaultValue(true)
         .build()
     );
@@ -101,6 +112,14 @@ public class WallBuilder extends Module {
         .build()
     );
 
+    private final Setting<Block> pattern3BlockType = sgPattern3.add(new BlockSetting.Builder()
+        .name("pattern3-block-type")
+        .description("The type of block to place for pattern 3.")
+        .defaultValue(Blocks.COBWEB)
+        .visible(usePattern3::get)
+        .build()
+    );
+
     private final Setting<Boolean> diagonalBuilding = sgGeneral.add(new BoolSetting.Builder()
         .name("diagonal-building")
         .description("Build walls diagonally instead of straight.")
@@ -138,14 +157,15 @@ public class WallBuilder extends Module {
     );
 
     // Pattern 1 boolean arrays for GUI
-    private final boolean[][] pattern1 = new boolean[5][5];
-    private final boolean[][] pattern2 = new boolean[5][5];
+    private boolean[][] pattern1 = new boolean[5][5];
+    private boolean[][] pattern2 = new boolean[5][5];
+    private boolean[][] pattern3 = new boolean[5][5];
 
     private long lastPlaceTime = 0;
     private int walkTicks = 0;
     private int currentRetries = 0;
     private BlockPos targetPos;
-    private final List<BlockPos> placedBlocks = new ArrayList<>();
+    private List<BlockPos> placedBlocks = new ArrayList<>();
     private boolean baritoneAvailable = false;
 
     private enum State {
@@ -162,6 +182,7 @@ public class WallBuilder extends Module {
             for (int j = 0; j < 5; j++) {
                 pattern1[i][j] = false;
                 pattern2[i][j] = false;
+                pattern3[i][j] = false;
             }
         }
 
@@ -212,13 +233,30 @@ public class WallBuilder extends Module {
             }
         }
 
+        // Pattern 3 section (only if usePattern3 is enabled)
+        if (usePattern3.get()) {
+            list.add(theme.label("Pattern 3")).expandX();
+            WTable table3 = theme.table();
+            list.add(table3);
+
+            for (int i = 0; i < 5; i++) {
+                for (int j = 0; j < 5; j++) {
+                    final int row = i;
+                    final int col = j;
+                    var checkbox = table3.add(theme.checkbox(pattern3[i][j])).widget();
+                    checkbox.action = () -> pattern3[row][col] = checkbox.checked;
+                }
+                table3.row();
+            }
+        }
+
         return list;
     }
 
     @Override
     public void onActivate() {
         buildStep = 0;
-        usingPattern1 = true;
+        currentPatternIndex = 1;
         walkTicks = 0;
         state = State.BUILDING;
         currentRetries = 0;
@@ -255,7 +293,14 @@ public class WallBuilder extends Module {
         Direction facing = mc.player.getHorizontalFacing();
         BlockPos start = mc.player.getBlockPos().offset(facing, 2);
 
-        boolean[][] currentPattern = usingPattern1 ? pattern1 : pattern2;
+        boolean[][] currentPattern;
+        switch(currentPatternIndex)
+        {
+            case 1 -> currentPattern = pattern1;
+            case 2 -> currentPattern = pattern2;
+            case 3 -> currentPattern = pattern3;
+            default -> throw new IllegalStateException("Unexpected pattern index: " + currentPatternIndex);
+        }
 
         for (int i = 0; i < 5; i++) {
             for (int j = 0; j < 5; j++) {
@@ -267,18 +312,24 @@ public class WallBuilder extends Module {
                     // Wall extends diagonally from the start position
                     // j ranges from 0-4, so blocks are placed at positions 0,1,2,3,4 along the diagonal
 
-                    pos = switch (facing) {
-                        case NORTH -> // Player facing North, render NE diagonal wall
+                    switch (facing) {
+                        case NORTH: // Player facing North, render NE diagonal wall
                             // Example: at (0,-59,0) render blocks at (0,-59,-4), (1,-59,-3), (2,-59,-2), (3,-59,-1), (4,-59,0)
-                            start.add(j, i, -2 + j); // NE diagonal: X increases, Z increases toward 0
-                        case EAST -> // Player facing East, render SE diagonal wall
-                            start.add(2 - j, i, j); // SE diagonal: X decreases from +2, Z increases
-                        case SOUTH -> // Player facing South, render SW diagonal wall
-                            start.add(-j, i, 2 - j); // SW diagonal: X decreases, Z decreases from +2
-                        case WEST -> // Player facing West, render NW diagonal wall
-                            start.add(-2 + j, i, -j); // NW diagonal: X increases toward 0, Z decreases
-                        default -> start.add(j, i, 0);
-                    };
+                            pos = start.add(j, i, -2 + j); // NE diagonal: X increases, Z increases toward 0
+                            break;
+                        case EAST: // Player facing East, render SE diagonal wall
+                            pos = start.add(2 - j, i, j); // SE diagonal: X decreases from +2, Z increases
+                            break;
+                        case SOUTH: // Player facing South, render SW diagonal wall
+                            pos = start.add(-j, i, 2 - j); // SW diagonal: X decreases, Z decreases from +2
+                            break;
+                        case WEST: // Player facing West, render NW diagonal wall
+                            pos = start.add(-2 + j, i, -j); // NW diagonal: X increases toward 0, Z decreases
+                            break;
+                        default:
+                            pos = start.add(j, i, 0);
+                            break;
+                    }
                 } else {
                     // Normal building: render straight wall perpendicular to facing direction
                     pos = start.add(
@@ -305,7 +356,13 @@ public class WallBuilder extends Module {
         Direction facing = mc.player.getHorizontalFacing();
         BlockPos start = mc.player.getBlockPos().offset(facing, 2);
 
-        boolean[][] currentPattern = usingPattern1 ? pattern1 : pattern2;
+        boolean[][] currentPattern;
+        switch (currentPatternIndex) {
+            case 1 -> currentPattern = pattern1;
+            case 2 -> currentPattern = pattern2;
+            case 3 -> currentPattern = pattern3;
+            default -> throw new IllegalStateException("Unexpected pattern index: " + currentPatternIndex);
+        }
 
         for (; buildStep < 25; buildStep++) {
             int x = buildStep % 5;
@@ -389,17 +446,23 @@ public class WallBuilder extends Module {
 
             if (diagonalBuilding.get()) {
                 // Diagonal movement commands - move backward-left to continue diagonal pattern
-                command = switch (facing) {
-                    case NORTH -> // Built NE diagonal, move SW to continue
-                        "#goto ~-1 ~ ~+1"; // Southwest
-                    case EAST -> // Built SE diagonal, move NW to continue
-                        "#goto ~-1 ~ ~-1"; // Northwest
-                    case SOUTH -> // Built SW diagonal, move NE to continue
-                        "#goto ~+1 ~ ~-1"; // Northeast
-                    case WEST -> // Built NW diagonal, move SE to continue
-                        "#goto ~+1 ~ ~+1"; // Southeast
-                    default -> "#goto ~-1 ~ ~+1"; // fallback
-                };
+                switch (facing) {
+                    case NORTH: // Built NE diagonal, move SW to continue
+                        command = "#goto ~-1 ~ ~+1"; // Southwest
+                        break;
+                    case EAST: // Built SE diagonal, move NW to continue
+                        command = "#goto ~-1 ~ ~-1"; // Northwest
+                        break;
+                    case SOUTH: // Built SW diagonal, move NE to continue
+                        command = "#goto ~+1 ~ ~-1"; // Northeast
+                        break;
+                    case WEST: // Built NW diagonal, move SE to continue
+                        command = "#goto ~+1 ~ ~+1"; // Southeast
+                        break;
+                    default:
+                        command = "#goto ~-1 ~ ~+1"; // fallback
+                        break;
+                }
             } else {
                 // Straight movement commands
                 switch (facing) {
@@ -472,11 +535,14 @@ public class WallBuilder extends Module {
 
         // Switch patterns and restart building continuously
         buildStep = 0;
+        placedBlocks.clear();
 
-        if (usePattern2.get()) {
-            usingPattern1 = !usingPattern1;
-            // Clear placed blocks when switching patterns so old blocks don't show
-            placedBlocks.clear();
+        if (usePattern2.get() && usePattern3.get()) {
+            currentPatternIndex = (currentPatternIndex % 3) + 1; // 1 -> 2 -> 3 -> 1
+        } else if (usePattern2.get()) {
+            currentPatternIndex = (currentPatternIndex % 2) + 1; // 1 -> 2 -> 1
+        } else {
+            currentPatternIndex = 1; // only pattern1 enabled
         }
 
         state = State.BUILDING;
@@ -485,10 +551,11 @@ public class WallBuilder extends Module {
     private boolean placeBlock(BlockPos pos) {
         // Use pattern-specific block type if available, otherwise fall back to general block type
         Block selectedBlock;
-        if (usingPattern1) {
-            selectedBlock = pattern1BlockType.get();
-        } else {
-            selectedBlock = pattern2BlockType.get();
+        switch (currentPatternIndex) {
+            case 1 -> selectedBlock = pattern1BlockType.get();
+            case 2 -> selectedBlock = pattern2BlockType.get();
+            case 3 -> selectedBlock = pattern3BlockType.get();
+            default -> selectedBlock = pattern1BlockType.get();
         }
 
         FindItemResult blockItem = InvUtils.findInHotbar(selectedBlock.asItem());
