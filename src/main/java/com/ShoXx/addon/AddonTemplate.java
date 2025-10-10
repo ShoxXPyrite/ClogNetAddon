@@ -16,12 +16,12 @@ import org.slf4j.Logger;
 
 public class AddonTemplate extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
-    public static final Category CATEGORY = new Category("ClogNet");
-    public static final HudGroup HUD_GROUP = new HudGroup("ClogNet");
+    public static final Category CATEGORY = new Category("TNT");
+    public static final HudGroup HUD_GROUP = new HudGroup("TNT");
 
     @Override
     public void onInitialize() {
-        LOG.info("Initializing ClogNet");
+        LOG.info("Initializing TNT Addon");
 
         // Modules
         Modules.get().add(new WallBuilder());

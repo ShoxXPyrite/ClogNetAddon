@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "clognet-addon",
+  "id": "tnt-addon",
   "version": "${version}",
-  "name": "ClogNet Addon",
-  "description": "An addon template for Meteor Client addons.",
+  "name": "TNT Addon",
+  "description": "A 2b2t greifing addon.",
   "authors": [
     "ShoXxPyrT"
   ],

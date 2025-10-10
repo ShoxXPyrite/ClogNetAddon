@@ -157,9 +157,9 @@ public class WallBuilder extends Module {
     );
 
     // Pattern 1 boolean arrays for GUI
-    private boolean[][] pattern1 = new boolean[5][5];
-    private boolean[][] pattern2 = new boolean[5][5];
-    private boolean[][] pattern3 = new boolean[5][5];
+    private boolean[][] pattern1 = new boolean[5][7];
+    private boolean[][] pattern2 = new boolean[5][7];
+    private boolean[][] pattern3 = new boolean[5][7];
 
     private long lastPlaceTime = 0;
     private int walkTicks = 0;
@@ -175,11 +175,11 @@ public class WallBuilder extends Module {
     }
 
     public WallBuilder() {
-        super(AddonTemplate.CATEGORY, "wall-builder", "Builds a 5x5 wall in front of you based on patterns using any selected block type.");
+        super(AddonTemplate.CATEGORY, "wall-builder", "Builds a 5x7 wall in front of you based on patterns using any selected block type.");
 
         // Initialize pattern arrays with default values
         for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
+            for (int j = 0; j < 7; j++) {
                 pattern1[i][j] = false;
                 pattern2[i][j] = false;
                 pattern3[i][j] = false;
@@ -207,7 +207,7 @@ public class WallBuilder extends Module {
         list.add(table1);
 
         for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
+            for (int j = 0; j < 7; j++) {
                 final int row = i;
                 final int col = j;
                 var checkbox = table1.add(theme.checkbox(pattern1[i][j])).widget();
@@ -223,7 +223,7 @@ public class WallBuilder extends Module {
             list.add(table2);
 
             for (int i = 0; i < 5; i++) {
-                for (int j = 0; j < 5; j++) {
+                for (int j = 0; j < 7; j++) {
                     final int row = i;
                     final int col = j;
                     var checkbox = table2.add(theme.checkbox(pattern2[i][j])).widget();
@@ -240,7 +240,7 @@ public class WallBuilder extends Module {
             list.add(table3);
 
             for (int i = 0; i < 5; i++) {
-                for (int j = 0; j < 5; j++) {
+                for (int j = 0; j < 7; j++) {
                     final int row = i;
                     final int col = j;
                     var checkbox = table3.add(theme.checkbox(pattern3[i][j])).widget();
@@ -303,39 +303,39 @@ public class WallBuilder extends Module {
         }
 
         for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
-                if (!currentPattern[i][j]) continue;
+            for (int j = 0; j < 7; j++) {
+                if (!currentPattern[4-i][j]) continue;
 
                 BlockPos pos;
                 if (diagonalBuilding.get()) {
-                    // Diagonal building: render wall along the diagonal axis the player is facing
-                    // Wall extends diagonally from the start position
-                    // j ranges from 0-4, so blocks are placed at positions 0,1,2,3,4 along the diagonal
+                    // Diagonal building: render wall centered on player's position
+                    // Wall extends diagonally from the player's position
+                    // j ranges from 0-6, centered at j=3 (player's position)
 
+                    BlockPos diagonalStart = mc.player.getBlockPos();
                     switch (facing) {
                         case NORTH: // Player facing North, render NE diagonal wall
-                            // Example: at (0,-59,0) render blocks at (0,-59,-4), (1,-59,-3), (2,-59,-2), (3,-59,-1), (4,-59,0)
-                            pos = start.add(j, i, -2 + j); // NE diagonal: X increases, Z increases toward 0
+                            pos = diagonalStart.add(j - 3, i, j - 3); // NE diagonal: X and Z increase from center
                             break;
                         case EAST: // Player facing East, render SE diagonal wall
-                            pos = start.add(2 - j, i, j); // SE diagonal: X decreases from +2, Z increases
+                            pos = diagonalStart.add(3 - j, i, j - 3); // SE diagonal: X decreases, Z increases from center
                             break;
                         case SOUTH: // Player facing South, render SW diagonal wall
-                            pos = start.add(-j, i, 2 - j); // SW diagonal: X decreases, Z decreases from +2
+                            pos = diagonalStart.add(3 - j, i, 3 - j); // SW diagonal: X and Z decrease from center
                             break;
                         case WEST: // Player facing West, render NW diagonal wall
-                            pos = start.add(-2 + j, i, -j); // NW diagonal: X increases toward 0, Z decreases
+                            pos = diagonalStart.add(j - 3, i, 3 - j); // NW diagonal: X increases, Z decreases from center
                             break;
                         default:
-                            pos = start.add(j, i, 0);
+                            pos = diagonalStart.add(j - 3, i, 0);
                             break;
                     }
                 } else {
                     // Normal building: render straight wall perpendicular to facing direction
                     pos = start.add(
-                        facing.rotateYClockwise().getOffsetX() * (j - 2),
+                        facing.rotateYClockwise().getOffsetX() * (j - 3),
                         i,
-                        facing.rotateYClockwise().getOffsetZ() * (j - 2)
+                        facing.rotateYClockwise().getOffsetZ() * (j - 3)
                     );
                 }
 
@@ -364,41 +364,41 @@ public class WallBuilder extends Module {
             default -> throw new IllegalStateException("Unexpected pattern index: " + currentPatternIndex);
         }
 
-        for (; buildStep < 25; buildStep++) {
-            int x = buildStep % 5;
-            int y = buildStep / 5;
-            if (!currentPattern[y][x]) continue;
+        for (; buildStep < 35; buildStep++) {
+            int x = buildStep % 7;
+            int y = buildStep / 7;
+            if (!currentPattern[4-y][x]) continue;
 
             BlockPos pos;
             if (diagonalBuilding.get()) {
-                // Diagonal building: build wall along the diagonal axis the player is facing
-                // Wall extends diagonally from the start position
-                // x ranges from 0-4, so blocks are placed at positions 0,1,2,3,4 along the diagonal
+                // Diagonal building: build wall centered on player's position
+                // Wall extends diagonally from the player's position
+                // x ranges from 0-6, centered at x=3 (player's position)
 
+                BlockPos diagonalStart = mc.player.getBlockPos();
                 switch (facing) {
                     case NORTH: // Player facing North, build NE diagonal wall
-                        // Example: at (0,-59,0) place blocks at (0,-59,-4), (1,-59,-3), (2,-59,-2), (3,-59,-1), (4,-59,0)
-                        pos = start.add(x, y, -2 + x); // NE diagonal: X increases, Z increases toward 0
+                        pos = diagonalStart.add(x - 3, y, x - 3); // NE diagonal: X and Z increase from center
                         break;
                     case EAST: // Player facing East, build SE diagonal wall
-                        pos = start.add(2 - x, y, x); // SE diagonal: X decreases from +2, Z increases
+                        pos = diagonalStart.add(3 - x, y, x - 3); // SE diagonal: X decreases, Z increases from center
                         break;
                     case SOUTH: // Player facing South, build SW diagonal wall
-                        pos = start.add(-x, y, 2 - x); // SW diagonal: X decreases, Z decreases from +2
+                        pos = diagonalStart.add(3 - x, y, 3 - x); // SW diagonal: X and Z decrease from center
                         break;
                     case WEST: // Player facing West, build NW diagonal wall
-                        pos = start.add(-2 + x, y, -x); // NW diagonal: X increases toward 0, Z decreases
+                        pos = diagonalStart.add(x - 3, y, 3 - x); // NW diagonal: X increases, Z decreases from center
                         break;
                     default:
-                        pos = start.add(x, y, 0);
+                        pos = diagonalStart.add(x - 3, y, 0);
                         break;
                 }
             } else {
                 // Normal building: build straight wall perpendicular to facing direction
                 pos = start.add(
-                    facing.rotateYClockwise().getOffsetX() * (x - 2),
+                    facing.rotateYClockwise().getOffsetX() * (x - 3),
                     y,
-                    facing.rotateYClockwise().getOffsetZ() * (x - 2)
+                    facing.rotateYClockwise().getOffsetZ() * (x - 3)
                 );
             }
 
@@ -424,7 +424,7 @@ public class WallBuilder extends Module {
             currentRetries = 0;
         }
 
-        if (buildStep >= 25) {
+        if (buildStep >= 35) {
             // Pattern completed
             if (autoWalk.get() && baritoneAvailable) {
                 startBaritoneWalk();
@@ -564,7 +564,7 @@ public class WallBuilder extends Module {
             toggle();
             return false;
         }
-
+        // Fallback to offhand swap method
         InvUtils.swap(blockItem.slot(), false);
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
